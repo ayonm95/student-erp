@@ -1,0 +1,12 @@
+{
+  "name": "student-erp",
+  "version": "1.0.0",
+  "description": "Student ERP Monorepo - Backend & Frontend",
+  "scripts": {
+    "backend": "cd backend && npm start",
+    "backend:dev": "cd backend && npm run dev",
+    "seed": "cd backend && npm run seed",
+    "frontend": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build"
+  }
+}
