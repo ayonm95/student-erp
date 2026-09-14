@@ -2,11 +2,23 @@ const mongoose = require('mongoose');
 const Enrollment = require('../models/Enrollment');
 const Student = require('../models/Student');
 const Course = require('../models/Course');
+const Attendance = require('../models/Attendance');
+const Grade = require('../models/Grade');
+const User = require('../models/User');
 
-// 11. POST /api/enrollment - Enroll student in course (Admin)
+// 11. POST /api/enrollment - Enroll student in course (Admin or Student self-enroll)
 const enrollStudent = async (req, res, next) => {
   try {
-    const { student, course, academicYear } = req.body;
+    let { student, course, academicYear } = req.body;
+
+    // If user is a student, automatically resolve their linked Student record
+    if (req.user && req.user.role === 'student') {
+      const studentProfile = await Student.findOne({ userId: req.user.id });
+      if (!studentProfile) {
+        return res.status(404).json({ success: false, message: 'Student profile not found for this account.', data: null });
+      }
+      student = studentProfile._id.toString();
+    }
 
     if (!student || !mongoose.Types.ObjectId.isValid(student)) {
       return res.status(400).json({ success: false, message: 'Valid student ID is required.', data: null });
@@ -14,9 +26,13 @@ const enrollStudent = async (req, res, next) => {
     if (!course || !mongoose.Types.ObjectId.isValid(course)) {
       return res.status(400).json({ success: false, message: 'Valid course ID is required.', data: null });
     }
-    if (!academicYear || typeof academicYear !== 'string' || !academicYear.trim()) {
-      return res.status(400).json({ success: false, message: 'academicYear is required (e.g., 2025-2026).', data: null });
-    }
+
+    // Default academicYear if not provided
+    const currentYear = new Date().getFullYear();
+    const defaultAcademicYear = `${currentYear}-${currentYear + 1}`;
+    const cleanYear = (academicYear && typeof academicYear === 'string' && academicYear.trim())
+      ? academicYear.trim()
+      : defaultAcademicYear;
 
     const studentDoc = await Student.findById(student);
     if (!studentDoc) {
@@ -27,8 +43,6 @@ const enrollStudent = async (req, res, next) => {
     if (!courseDoc) {
       return res.status(404).json({ success: false, message: 'Course not found.', data: null });
     }
-
-    const cleanYear = academicYear.trim();
 
     // Check duplicate enrollment
     const existing = await Enrollment.findOne({
@@ -51,8 +65,11 @@ const enrollStudent = async (req, res, next) => {
     });
 
     const populated = await Enrollment.findById(enrollment._id)
-      .populate('student')
-      .populate('course');
+      .populate('course')
+      .populate({
+        path: 'student',
+        populate: { path: 'userId', select: 'name email' },
+      });
 
     return res.status(201).json({
       success: true,
@@ -91,7 +108,7 @@ const getStudentEnrollments = async (req, res, next) => {
   }
 };
 
-// 13. DELETE /api/enrollment/:id - Unenroll student from course (Admin)
+// 13. DELETE /api/enrollment/:id - Unenroll student from course (Admin or Student self-drop)
 const unenrollStudent = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -103,6 +120,35 @@ const unenrollStudent = async (req, res, next) => {
     const enrollment = await Enrollment.findById(id);
     if (!enrollment) {
       return res.status(404).json({ success: false, message: 'Enrollment record not found.', data: null });
+    }
+
+    // If student role, ensure student owns this enrollment
+    if (req.user && req.user.role === 'student') {
+      const studentProfile = await Student.findOne({ userId: req.user.id });
+      if (!studentProfile || enrollment.student.toString() !== studentProfile._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. You can only drop your own enrolled courses.',
+          data: null,
+        });
+      }
+    }
+
+    // Check if attendance or grades already exist for this student and course
+    const [attCount, gradeCount] = await Promise.all([
+      Attendance.countDocuments({ student: enrollment.student, course: enrollment.course }),
+      Grade.countDocuments({ student: enrollment.student, course: enrollment.course }),
+    ]);
+
+    if (attCount > 0 || gradeCount > 0) {
+      const reasons = [];
+      if (attCount > 0) reasons.push(`${attCount} attendance session(s)`);
+      if (gradeCount > 0) reasons.push(`${gradeCount} grade evaluation(s)`);
+      return res.status(400).json({
+        success: false,
+        message: `Cannot unenroll from this course because ${reasons.join(' and ')} already exist for this subject. Please contact the administration.`,
+        data: null,
+      });
     }
 
     await Enrollment.findByIdAndDelete(id);

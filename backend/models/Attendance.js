@@ -27,7 +27,7 @@ const attendanceSchema = new mongoose.Schema(
   }
 );
 
-// Helpful index to speed up lookups by student and course
-attendanceSchema.index({ student: 1, course: 1, date: 1 });
+// Compound unique index ensuring one attendance record per student per course per calendar date
+attendanceSchema.index({ student: 1, course: 1, date: 1 }, { unique: true });
 
 module.exports = mongoose.model('Attendance', attendanceSchema);

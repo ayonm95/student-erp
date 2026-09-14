@@ -33,6 +33,7 @@ const gradeSchema = new mongoose.Schema(
   }
 );
 
-gradeSchema.index({ student: 1, course: 1, examType: 1 });
+// Compound unique index preventing duplicate grades for the same exam type per student per course
+gradeSchema.index({ student: 1, course: 1, examType: 1 }, { unique: true });
 
 module.exports = mongoose.model('Grade', gradeSchema);

@@ -3,10 +3,71 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Student = require('../models/Student');
 
+const DEPARTMENT_CODES = {
+  'computer science': 'CS',
+  'information technology': 'IT',
+  'electronics & communication': 'EC',
+  'electrical engineering': 'EE',
+  'mechanical engineering': 'ME',
+  'civil engineering': 'CE',
+  'data science & ai': 'DS',
+};
+
+const getDeptCode = (department) => {
+  if (!department) return 'CS';
+  const clean = department.trim().toLowerCase();
+  if (DEPARTMENT_CODES[clean]) return DEPARTMENT_CODES[clean];
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+  return clean.substring(0, 2).toUpperCase();
+};
+
+const generateNextRollNumber = async (department, year) => {
+  const deptCode = getDeptCode(department);
+  const currentYear = year || new Date().getFullYear();
+  const prefix = `${deptCode}${currentYear}`;
+
+  const existingStudents = await Student.find({
+    rollNumber: new RegExp(`^${prefix}`, 'i'),
+  }).select('rollNumber');
+
+  let maxSeq = 0;
+  for (const s of existingStudents) {
+    const suffix = s.rollNumber.substring(prefix.length);
+    const num = parseInt(suffix, 10);
+    if (!isNaN(num) && num > maxSeq) {
+      maxSeq = num;
+    }
+  }
+
+  const nextSeq = maxSeq + 1;
+  return `${prefix}${String(nextSeq).padStart(3, '0')}`;
+};
+
+// GET /api/auth/next-roll-number - Preview next sequential roll number
+const getNextRollNumber = async (req, res, next) => {
+  try {
+    const { department, year } = req.query;
+    if (!department) {
+      return res.status(400).json({ success: false, message: 'Department query parameter is required.', data: null });
+    }
+    const rollNumber = await generateNextRollNumber(department, year ? Number(year) : undefined);
+    return res.status(200).json({
+      success: true,
+      message: 'Next sequential roll number calculated successfully.',
+      data: { rollNumber, department, year: year || new Date().getFullYear() },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // 1. POST /api/auth/register - Student self-signup
 const register = async (req, res, next) => {
   try {
-    const { name, email, password, rollNumber, department, semester } = req.body;
+    let { name, email, password, rollNumber, department, semester } = req.body;
 
     // Manual validation
     if (!name || typeof name !== 'string' || !name.trim()) {
@@ -22,9 +83,6 @@ const register = async (req, res, next) => {
         data: null,
       });
     }
-    if (!rollNumber || typeof rollNumber !== 'string' || !rollNumber.trim()) {
-      return res.status(400).json({ success: false, message: 'Roll number is required.', data: null });
-    }
     if (!department || typeof department !== 'string' || !department.trim()) {
       return res.status(400).json({ success: false, message: 'Department is required.', data: null });
     }
@@ -35,6 +93,11 @@ const register = async (req, res, next) => {
         message: 'Semester must be a valid number between 1 and 12.',
         data: null,
       });
+    }
+
+    // If roll number not provided or empty, auto-generate sequential roll number
+    if (!rollNumber || typeof rollNumber !== 'string' || !rollNumber.trim()) {
+      rollNumber = await generateNextRollNumber(department);
     }
 
     const cleanEmail = email.toLowerCase().trim();
@@ -180,4 +243,5 @@ const login = async (req, res, next) => {
 module.exports = {
   register,
   login,
+  getNextRollNumber,
 };

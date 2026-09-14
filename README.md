@@ -28,16 +28,23 @@ Designed with clean role-based access control (**Admin** and **Student**), compl
 - **Student Registry (CRUD)**: Manage student records, search across names/roll numbers, edit academic details, or delete profiles with cascading referential cleanup.
 - **Course Catalog (CRUD)**: Create and configure curriculum courses with credit weights, semester assignments, and department affiliations.
 - **Enrollment Center (CRUD)**: Enroll students into courses with compound-index duplicate enrollment prevention; unenroll with one click.
-- **Attendance Logging (CRUD)**: Mark attendance records by student, subject, and date; inspect chronological logs and correct session entries.
-- **Grade & Assessment Registry (CRUD)**: Enter and update scores across Internal Exam 1, Internal Exam 2, and End-Semester External exams with max mark ceiling validation.
+- **Strict Attendance Safeguards (CRUD)**:
+  - **Enrollment Enforcement**: Admin cannot record attendance for students in courses they have not enrolled in.
+  - **Two-Way Dynamic Dropdown Filtering**: Selecting a Student automatically filters courses to only enrolled subjects; selecting a Course automatically filters students to only enrolled learners.
+  - **Double-Entry Prevention**: Strictly prevents duplicate attendance entries for the same student + course on the same calendar day while allowing multiple different classes per day.
+- **Grade & Assessment Registry (CRUD)**:
+  - Enforces enrollment verification before grading.
+  - Prevents duplicate marks per examination type (`internal1`, `internal2`, `external`).
+  - Strict numeric validation with max-mark ceiling checks.
 
 ### Student Portal (Student Role)
-- **Self-Registration**: Easy signup generating linked `User` and `Student` profile documents.
+- **Systematic Sequential Roll Numbers**: Live auto-calculation during registration following standard academic format `[DeptCode][Year][3-digit Sequence]` (e.g. `CS2026001`).
+- **Course Catalog & Self-Enrollment**: Open university curriculum browser allowing students to 1-click self-enroll into subjects directly from their portal.
+- **Safe Course Self-Drop**: Students can drop an enrolled subject from their portal, protected by a safety guard that prevents dropping once attendance logs or grades are recorded.
 - **My Academic Profile**: View verified student information (Roll Number, Department, Semester, Enrollment status).
-- **Enrolled Courses**: View current semester curriculum, credit weightage, and academic year mappings.
 - **Attendance Performance Tracker**: Real-time attendance percentage gauge with color-coded compliance alerts ($\ge 75\%$ compliant vs $< 75\%$ shortage alert) and chronological session logs.
 - **Academic Transcript & Report Card**: Comprehensive exam mark sheet with percentage breakdown, automated letter grading ($A+$, $A$, $B+$, $B$, $C$, $F$), and cumulative score metrics.
-- **Strict Ownership Guarantee**: Complete data isolation; students can only view their own records. Cross-student data viewing is prohibited at the database and middleware layers.
+- **Strict Ownership & WCAG Accessibility**: Complete data isolation with defense-in-depth ownership checks, high-contrast `:focus-visible` rings, ARIA live regions, and full keyboard/touch accessibility.
 
 ---
 
@@ -349,6 +356,51 @@ Even under simultaneous concurrent requests, MongoDB guarantees that an identica
 
 For a comprehensive breakdown of all engineering choices, database normalizations, security strategies, and full end-to-end data lifecycle explanations, refer to:
 [DECISIONS.md](file:///Users/ayon/Downloads/all%20projects/student_erp/DECISIONS.md)
+
+---
+
+## Deploying to Vercel (Production Ready)
+
+The Student ERP is pre-configured for seamless **1-Click Monorepo deployment on Vercel** with unified domain routing, zero CORS issues, and serverless Express API integration via [vercel.json](file:///Users/ayon/Downloads/all%20projects/student_erp/vercel.json).
+
+### Quick Deployment Steps:
+
+1. **Push your code to GitHub** (or GitLab/Bitbucket).
+2. **Log into [Vercel](https://vercel.com/)** and click **"Add New Project"**.
+3. **Import your Git repository**.
+4. **Configure Project Settings**:
+   - **Framework Preset**: Vite
+   - **Root Directory**: `./` (leave default)
+   - **Build Command**: `npm run build` (configured automatically via `vercel.json`)
+   - **Output Directory**: `frontend/dist` (configured automatically via `vercel.json`)
+5. **Environment Variables**:
+   Under the **Environment Variables** tab in Vercel, add:
+   | Variable | Value | Description |
+   |---|---|---|
+   | `MONGO_URI` | `mongodb+srv://<user>:<password>@cluster.mongodb.net/student_erp?...` | Your MongoDB Atlas connection string |
+   | `JWT_SECRET` | `your_secure_jwt_random_secret_here` | Cryptographic secret for signing tokens |
+   | `ADMIN_EMAIL` | `admin@erp.edu` *(Optional)* | Default admin login email |
+   | `ADMIN_PASSWORD` | `AdminPass@123` *(Optional)* | Default admin password |
+
+6. **MongoDB Atlas Network Access Configuration**:
+   - In your [MongoDB Atlas Console](https://cloud.mongodb.com/):
+   - Navigate to **Security** -> **Network Access** -> **Add IP Address**.
+   - Select **Allow Access From Anywhere** (`0.0.0.0/0`) and click **Confirm** (required for Vercel dynamic serverless execution).
+
+7. **Click Deploy**:
+   - Vercel will install dependencies, build the React SPA, and mount the Express serverless API at `/api/*`.
+
+### Production Verification on Vercel:
+- **Admin Portal Access**:
+  - Navigate to `https://<your-project>.vercel.app/login`
+  - Enter `admin@erp.edu` / `AdminPass@123` (or click "Fill Admin").
+  - The admin account is automatically provisioned if it doesn't already exist in the database.
+  - Access the full Admin Dashboard to manage Students, Courses, Enrollments, Attendance, and Grades.
+- **Student Registration & Portal Access**:
+  - Navigate to `https://<your-project>.vercel.app/register`
+  - Fill in Name, Email, Password, Department, and Semester.
+  - Notice the live sequential Roll Number preview (e.g. `CS2026001`).
+  - Click **Create Student Account** — you are immediately registered, authenticated, and redirected to the Student Dashboard to browse courses and self-enroll.
 
 ---
 

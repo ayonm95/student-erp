@@ -127,6 +127,7 @@ body {
 .brand-title span {
   background: linear-gradient(135deg, #818cf8, #38bdf8);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -1421,3 +1422,169 @@ select {
 .mt-6 {
   margin-top: 1.5rem;
 }
+
+/* ---------------- Accessibility & Focus Rings (WCAG 2.1 AA) ---------------- */
+:focus-visible {
+  outline: 2px solid #6366f1 !important;
+  outline-offset: 2px !important;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 2px solid #818cf8 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35) !important;
+}
+
+/* ---------------- Sequential Roll Number Badge & Input ---------------- */
+.label-with-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.badge-sequence {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.02em;
+}
+
+.input-readonly {
+  background: rgba(15, 23, 42, 0.6) !important;
+  color: #38bdf8 !important;
+  font-family: monospace;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  cursor: default;
+}
+
+.input-inline-btn {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-fast);
+}
+
+.input-inline-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ---------------- Course Catalog & Self-Enrollment ---------------- */
+.catalog-filters-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.search-input-wrapper {
+  position: relative;
+  flex: 1;
+  min-width: 250px;
+}
+
+.search-input-wrapper .search-icon {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.search-input-wrapper input {
+  padding-left: 2.4rem;
+  width: 100%;
+}
+
+.select-dept-wrapper select {
+  min-width: 220px;
+}
+
+.course-card-enrolled {
+  border-color: rgba(34, 197, 94, 0.35) !important;
+  background: linear-gradient(145deg, rgba(34, 197, 94, 0.05) 0%, rgba(13, 20, 36, 0.8) 100%) !important;
+}
+
+.course-card-footer {
+  margin-top: 1.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.header-actions-flex {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.btn-outline-danger-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-md);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  min-height: 36px;
+}
+
+.btn-outline-danger-sm:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
+  color: #fff;
+}
+
+.btn-outline-danger-sm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.slide-down {
+  animation: slideDownAlert 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideDownAlert {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

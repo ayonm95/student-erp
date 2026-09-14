@@ -2,6 +2,8 @@ const mongoose = require('mongoose');
 const Attendance = require('../models/Attendance');
 const Student = require('../models/Student');
 const Course = require('../models/Course');
+const Enrollment = require('../models/Enrollment');
+const User = require('../models/User');
 
 // 14. POST /api/attendance - Mark attendance (Admin)
 const markAttendance = async (req, res, next) => {
@@ -21,6 +23,9 @@ const markAttendance = async (req, res, next) => {
     if (isNaN(parsedDate.getTime())) {
       return res.status(400).json({ success: false, message: 'Invalid date format.', data: null });
     }
+    // Normalize date to calendar day UTC midnight to prevent time-based duplicates
+    parsedDate.setUTCHours(0, 0, 0, 0);
+
     if (!status || !['present', 'absent'].includes(status.toLowerCase())) {
       return res.status(400).json({
         success: false,
@@ -38,6 +43,31 @@ const markAttendance = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Course not found.', data: null });
     }
 
+    // Check if student is actually enrolled in this course
+    const isEnrolled = await Enrollment.findOne({ student, course });
+    if (!isEnrolled) {
+      return res.status(400).json({
+        success: false,
+        message: `Student is not enrolled in course ${courseDoc.courseCode} (${courseDoc.courseName}). Please enroll the student in this course first.`,
+        data: null,
+      });
+    }
+
+    // Prevent duplicate entry for same student, course, and date
+    const existing = await Attendance.findOne({
+      student,
+      course,
+      date: parsedDate,
+    });
+    if (existing) {
+      const dateStr = parsedDate.toISOString().split('T')[0];
+      return res.status(400).json({
+        success: false,
+        message: `Attendance for this student in ${courseDoc.courseCode} on ${dateStr} has already been recorded (${existing.status.toUpperCase()}). Please edit the existing entry if correction is needed.`,
+        data: null,
+      });
+    }
+
     const attendance = await Attendance.create({
       student,
       course,
@@ -46,8 +76,11 @@ const markAttendance = async (req, res, next) => {
     });
 
     const populated = await Attendance.findById(attendance._id)
-      .populate('student')
-      .populate('course');
+      .populate('course')
+      .populate({
+        path: 'student',
+        populate: { path: 'userId', select: 'name email' },
+      });
 
     return res.status(201).json({
       success: true,
@@ -117,6 +150,22 @@ const updateAttendance = async (req, res, next) => {
       if (isNaN(parsedDate.getTime())) {
         return res.status(400).json({ success: false, message: 'Invalid date format.', data: null });
       }
+      parsedDate.setUTCHours(0, 0, 0, 0);
+
+      const duplicate = await Attendance.findOne({
+        _id: { $ne: id },
+        student: attendance.student,
+        course: attendance.course,
+        date: parsedDate,
+      });
+      if (duplicate) {
+        const dateStr = parsedDate.toISOString().split('T')[0];
+        return res.status(400).json({
+          success: false,
+          message: `An attendance entry already exists for this student in this course on ${dateStr}.`,
+          data: null,
+        });
+      }
       attendance.date = parsedDate;
     }
 
@@ -124,7 +173,10 @@ const updateAttendance = async (req, res, next) => {
 
     const populated = await Attendance.findById(id)
       .populate('course')
-      .populate('student');
+      .populate({
+        path: 'student',
+        populate: { path: 'userId', select: 'name email' },
+      });
 
     return res.status(200).json({
       success: true,

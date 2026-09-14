@@ -2,6 +2,8 @@ const mongoose = require('mongoose');
 const Grade = require('../models/Grade');
 const Student = require('../models/Student');
 const Course = require('../models/Course');
+const Enrollment = require('../models/Enrollment');
+const User = require('../models/User');
 
 const VALID_EXAM_TYPES = ['internal1', 'internal2', 'external'];
 
@@ -58,6 +60,26 @@ const enterGrade = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Course not found.', data: null });
     }
 
+    // Check if student is actually enrolled in this course
+    const isEnrolled = await Enrollment.findOne({ student, course });
+    if (!isEnrolled) {
+      return res.status(400).json({
+        success: false,
+        message: `Student is not enrolled in course ${courseDoc.courseCode} (${courseDoc.courseName}). Grades cannot be recorded for non-enrolled courses.`,
+        data: null,
+      });
+    }
+
+    // Check for duplicate grade entry for same student, course, and examType
+    const existingGrade = await Grade.findOne({ student, course, examType });
+    if (existingGrade) {
+      return res.status(400).json({
+        success: false,
+        message: `Grade marks for '${examType}' have already been recorded for this student in ${courseDoc.courseCode}. Please edit the existing grade record instead.`,
+        data: null,
+      });
+    }
+
     const grade = await Grade.create({
       student,
       course,
@@ -67,8 +89,11 @@ const enterGrade = async (req, res, next) => {
     });
 
     const populated = await Grade.findById(grade._id)
-      .populate('student')
-      .populate('course');
+      .populate('course')
+      .populate({
+        path: 'student',
+        populate: { path: 'userId', select: 'name email' },
+      });
 
     return res.status(201).json({
       success: true,
@@ -166,7 +191,10 @@ const updateGrade = async (req, res, next) => {
 
     const populated = await Grade.findById(id)
       .populate('course')
-      .populate('student');
+      .populate({
+        path: 'student',
+        populate: { path: 'userId', select: 'name email' },
+      });
 
     return res.status(200).json({
       success: true,

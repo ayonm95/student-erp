@@ -111,6 +111,28 @@ const AdminDashboard = () => {
     fetchAllData();
   }, []);
 
+  // Keyboard accessibility: dismiss modals with Escape key
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        setModalType(null);
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, []);
+
+  // Digits-only keydown filter for numeric inputs
+  const handleDigitsOnlyKeyDown = (e) => {
+    const navigationKeys = ['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight'];
+    if (navigationKeys.includes(e.key) || e.ctrlKey || e.metaKey) {
+      return;
+    }
+    if (!/^\d$/.test(e.key)) {
+      e.preventDefault();
+    }
+  };
+
   // ---------------- Handlers for Courses ----------------
   const handleCreateCourse = async (e) => {
     e.preventDefault();
@@ -260,7 +282,14 @@ const AdminDashboard = () => {
         status: attendanceForm.status,
         date: attendanceForm.date,
       });
-      setAttendanceRecords((prev) => prev.map((a) => (a._id === activeItem._id ? res.data.data : a)));
+      const updated = res.data.data;
+      if ((!updated?.student?.userId?.name) && activeItem?.student) {
+        updated.student = activeItem.student;
+      }
+      if ((!updated?.course?.courseName) && activeItem?.course) {
+        updated.course = activeItem.course;
+      }
+      setAttendanceRecords((prev) => prev.map((a) => (a._id === activeItem._id ? updated : a)));
       showFeedback('success', 'Attendance corrected successfully!');
       setModalType(null);
     } catch (err) {
@@ -295,7 +324,14 @@ const AdminDashboard = () => {
         marksObtained: gradeForm.marksObtained,
         maxMarks: gradeForm.maxMarks,
       });
-      setGrades((prev) => prev.map((g) => (g._id === activeItem._id ? res.data.data : g)));
+      const updated = res.data.data;
+      if ((!updated?.student?.userId?.name) && activeItem?.student) {
+        updated.student = activeItem.student;
+      }
+      if ((!updated?.course?.courseName) && activeItem?.course) {
+        updated.course = activeItem.course;
+      }
+      setGrades((prev) => prev.map((g) => (g._id === activeItem._id ? updated : g)));
       showFeedback('success', 'Grade record updated successfully!');
       setModalType(null);
     } catch (err) {
@@ -744,28 +780,37 @@ const AdminDashboard = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {enrollments.map((enr) => (
-                      <tr key={enr._id}>
-                        <td>
-                          <span className="code-badge">{enr.student?.rollNumber || 'N/A'}</span>
-                        </td>
-                        <td className="font-semibold">{enr.student?.userId?.name || 'N/A'}</td>
-                        <td>
-                          <span className="code-badge">{enr.course?.courseCode || 'N/A'}</span>
-                        </td>
-                        <td>{enr.course?.courseName || 'N/A'}</td>
-                        <td>{enr.academicYear}</td>
-                        <td>
-                          <button
-                            onClick={() => handleUnenroll(enr._id)}
-                            className="btn-icon btn-delete"
-                            title="Unenroll Student"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {enrollments.map((enr) => {
+                      const studentObj = typeof enr.student === 'object' && enr.student !== null ? enr.student : null;
+                      const matchedStudent = students.find((s) => s._id === (studentObj?._id || enr.student));
+                      const rollNumber = studentObj?.rollNumber || matchedStudent?.rollNumber || 'N/A';
+                      const studentName = studentObj?.userId?.name || studentObj?.name || matchedStudent?.userId?.name || 'N/A';
+                      const courseCode = enr.course?.courseCode || courses.find((c) => c._id === (enr.course?._id || enr.course))?.courseCode || 'N/A';
+                      const courseName = enr.course?.courseName || courses.find((c) => c._id === (enr.course?._id || enr.course))?.courseName || 'N/A';
+
+                      return (
+                        <tr key={enr._id}>
+                          <td>
+                            <span className="code-badge">{rollNumber}</span>
+                          </td>
+                          <td className="font-semibold">{studentName}</td>
+                          <td>
+                            <span className="code-badge">{courseCode}</span>
+                          </td>
+                          <td>{courseName}</td>
+                          <td>{enr.academicYear}</td>
+                          <td>
+                            <button
+                              onClick={() => handleUnenroll(enr._id)}
+                              className="btn-icon btn-delete"
+                              title="Unenroll Student"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {enrollments.length === 0 && (
                       <tr>
                         <td colSpan="6" className="text-center py-6 text-muted">
@@ -818,41 +863,50 @@ const AdminDashboard = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {attendanceRecords.map((rec) => (
-                      <tr key={rec._id}>
-                        <td>{new Date(rec.date).toLocaleDateString()}</td>
-                        <td>
-                          <span className="code-badge">{rec.student?.rollNumber || 'N/A'}</span>
-                        </td>
-                        <td className="font-semibold">{rec.student?.userId?.name || 'N/A'}</td>
-                        <td>
-                          {rec.course?.courseCode} - {rec.course?.courseName}
-                        </td>
-                        <td>
-                          <span className={`status-pill ${rec.status}`}>
-                            {rec.status.toUpperCase()}
-                          </span>
-                        </td>
-                        <td>
-                          <button
-                            onClick={() => {
-                              setActiveItem(rec);
-                              setAttendanceForm({
-                                student: rec.student?._id || '',
-                                course: rec.course?._id || '',
-                                date: new Date(rec.date).toISOString().split('T')[0],
-                                status: rec.status,
-                              });
-                              setModalType('editAttendance');
-                            }}
-                            className="btn-icon btn-edit"
-                            title="Correct Attendance Entry"
-                          >
-                            <Edit2 size={15} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {attendanceRecords.map((rec) => {
+                      const studentObj = typeof rec.student === 'object' && rec.student !== null ? rec.student : null;
+                      const matchedStudent = students.find((s) => s._id === (studentObj?._id || rec.student));
+                      const rollNumber = studentObj?.rollNumber || matchedStudent?.rollNumber || 'N/A';
+                      const studentName = studentObj?.userId?.name || studentObj?.name || matchedStudent?.userId?.name || 'N/A';
+                      const courseCode = rec.course?.courseCode || courses.find((c) => c._id === (rec.course?._id || rec.course))?.courseCode || 'N/A';
+                      const courseName = rec.course?.courseName || courses.find((c) => c._id === (rec.course?._id || rec.course))?.courseName || '';
+
+                      return (
+                        <tr key={rec._id}>
+                          <td>{new Date(rec.date).toLocaleDateString()}</td>
+                          <td>
+                            <span className="code-badge">{rollNumber}</span>
+                          </td>
+                          <td className="font-semibold">{studentName}</td>
+                          <td>
+                            {courseCode} - {courseName}
+                          </td>
+                          <td>
+                            <span className={`status-pill ${rec.status}`}>
+                              {rec.status.toUpperCase()}
+                            </span>
+                          </td>
+                          <td>
+                            <button
+                              onClick={() => {
+                                setActiveItem(rec);
+                                setAttendanceForm({
+                                  student: rec.student?._id || rec.student || '',
+                                  course: rec.course?._id || rec.course || '',
+                                  date: new Date(rec.date).toISOString().split('T')[0],
+                                  status: rec.status,
+                                });
+                                setModalType('editAttendance');
+                              }}
+                              className="btn-icon btn-edit"
+                              title="Correct Attendance Entry"
+                            >
+                              <Edit2 size={15} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {attendanceRecords.length === 0 && (
                       <tr>
                         <td colSpan="6" className="text-center py-6 text-muted">
@@ -908,15 +962,22 @@ const AdminDashboard = () => {
                   </thead>
                   <tbody>
                     {grades.map((grd) => {
+                      const studentObj = typeof grd.student === 'object' && grd.student !== null ? grd.student : null;
+                      const matchedStudent = students.find((s) => s._id === (studentObj?._id || grd.student));
+                      const rollNumber = studentObj?.rollNumber || matchedStudent?.rollNumber || 'N/A';
+                      const studentName = studentObj?.userId?.name || studentObj?.name || matchedStudent?.userId?.name || 'N/A';
+                      const courseCode = grd.course?.courseCode || courses.find((c) => c._id === (grd.course?._id || grd.course))?.courseCode || 'N/A';
+                      const courseName = grd.course?.courseName || courses.find((c) => c._id === (grd.course?._id || grd.course))?.courseName || '';
                       const pct = Math.round((grd.marksObtained / grd.maxMarks) * 100);
+
                       return (
                         <tr key={grd._id}>
                           <td>
-                            <span className="code-badge">{grd.student?.rollNumber || 'N/A'}</span>
+                            <span className="code-badge">{rollNumber}</span>
                           </td>
-                          <td className="font-semibold">{grd.student?.userId?.name || 'N/A'}</td>
+                          <td className="font-semibold">{studentName}</td>
                           <td>
-                            {grd.course?.courseCode} - {grd.course?.courseName}
+                            {courseCode} - {courseName}
                           </td>
                           <td>
                             <span className={`exam-pill ${grd.examType}`}>
@@ -937,8 +998,8 @@ const AdminDashboard = () => {
                                 onClick={() => {
                                   setActiveItem(grd);
                                   setGradeForm({
-                                    student: grd.student?._id || '',
-                                    course: grd.course?._id || '',
+                                    student: grd.student?._id || grd.student || '',
+                                    course: grd.course?._id || grd.course || '',
                                     examType: grd.examType,
                                     marksObtained: grd.marksObtained,
                                     maxMarks: grd.maxMarks,
@@ -980,9 +1041,15 @@ const AdminDashboard = () => {
       {/* ---------------- MODAL OVERLAYS ---------------- */}
       {modalType && (
         <div className="modal-backdrop" onClick={() => setModalType(null)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal-box"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h3>
+              <h3 id="modal-title">
                 {modalType === 'createCourse' && 'Add New Course'}
                 {modalType === 'editCourse' && `Edit Course: ${activeItem?.courseCode}`}
                 {modalType === 'editStudent' && `Edit Student: ${activeItem?.rollNumber}`}
@@ -992,8 +1059,13 @@ const AdminDashboard = () => {
                 {modalType === 'enterGrade' && 'Enter Exam Grade'}
                 {modalType === 'editGrade' && 'Update Grade Entry'}
               </h3>
-              <button onClick={() => setModalType(null)} className="btn-close-modal">
-                <X size={18} />
+              <button
+                onClick={() => setModalType(null)}
+                className="btn-close-modal"
+                aria-label="Close modal (or press Escape)"
+                title="Close dialog (Escape)"
+              >
+                <X size={18} aria-hidden="true" />
               </button>
             </div>
 
@@ -1002,8 +1074,9 @@ const AdminDashboard = () => {
               {(modalType === 'createCourse' || modalType === 'editCourse') && (
                 <form onSubmit={modalType === 'createCourse' ? handleCreateCourse : handleUpdateCourse}>
                   <div className="form-group">
-                    <label>Course Code</label>
+                    <label htmlFor="modal-courseCode">Course Code</label>
                     <input
+                      id="modal-courseCode"
                       type="text"
                       placeholder="e.g. CS501"
                       value={courseForm.courseCode}
@@ -1012,8 +1085,9 @@ const AdminDashboard = () => {
                     />
                   </div>
                   <div className="form-group">
-                    <label>Course Name</label>
+                    <label htmlFor="modal-courseName">Course Name</label>
                     <input
+                      id="modal-courseName"
                       type="text"
                       placeholder="e.g. Operating Systems"
                       value={courseForm.courseName}
@@ -1023,31 +1097,42 @@ const AdminDashboard = () => {
                   </div>
                   <div className="form-grid-2">
                     <div className="form-group">
-                      <label>Credits (1-10)</label>
+                      <label htmlFor="modal-credits">Credits (1-10 digits only)</label>
                       <input
-                        type="number"
-                        min="1"
-                        max="10"
+                        id="modal-credits"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={courseForm.credits}
-                        onChange={(e) => setCourseForm({ ...courseForm, credits: Number(e.target.value) })}
+                        onKeyDown={handleDigitsOnlyKeyDown}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '');
+                          setCourseForm({ ...courseForm, credits: val === '' ? '' : Math.min(Math.max(Number(val), 1), 10) });
+                        }}
                         required
                       />
                     </div>
                     <div className="form-group">
-                      <label>Semester (1-12)</label>
+                      <label htmlFor="modal-semester">Semester (1-12 digits only)</label>
                       <input
-                        type="number"
-                        min="1"
-                        max="12"
+                        id="modal-semester"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={courseForm.semester}
-                        onChange={(e) => setCourseForm({ ...courseForm, semester: Number(e.target.value) })}
+                        onKeyDown={handleDigitsOnlyKeyDown}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '');
+                          setCourseForm({ ...courseForm, semester: val === '' ? '' : Math.min(Math.max(Number(val), 1), 12) });
+                        }}
                         required
                       />
                     </div>
                   </div>
                   <div className="form-group">
-                    <label>Department</label>
+                    <label htmlFor="modal-dept">Department</label>
                     <input
+                      id="modal-dept"
                       type="text"
                       placeholder="e.g. Computer Science"
                       value={courseForm.department}
@@ -1070,8 +1155,9 @@ const AdminDashboard = () => {
               {modalType === 'editStudent' && (
                 <form onSubmit={handleUpdateStudent}>
                   <div className="form-group">
-                    <label>Student Full Name</label>
+                    <label htmlFor="edit-std-name">Student Full Name</label>
                     <input
+                      id="edit-std-name"
                       type="text"
                       value={studentForm.name}
                       onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })}
@@ -1079,8 +1165,9 @@ const AdminDashboard = () => {
                     />
                   </div>
                   <div className="form-group">
-                    <label>Email Address</label>
+                    <label htmlFor="edit-std-email">Email Address</label>
                     <input
+                      id="edit-std-email"
                       type="email"
                       value={studentForm.email}
                       onChange={(e) => setStudentForm({ ...studentForm, email: e.target.value })}
@@ -1089,8 +1176,9 @@ const AdminDashboard = () => {
                   </div>
                   <div className="form-grid-2">
                     <div className="form-group">
-                      <label>Roll Number</label>
+                      <label htmlFor="edit-std-roll">Roll Number</label>
                       <input
+                        id="edit-std-roll"
                         type="text"
                         value={studentForm.rollNumber}
                         onChange={(e) => setStudentForm({ ...studentForm, rollNumber: e.target.value })}
@@ -1098,20 +1186,26 @@ const AdminDashboard = () => {
                       />
                     </div>
                     <div className="form-group">
-                      <label>Semester</label>
+                      <label htmlFor="edit-std-sem">Semester (1-12 digits only)</label>
                       <input
-                        type="number"
-                        min="1"
-                        max="12"
+                        id="edit-std-sem"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={studentForm.semester}
-                        onChange={(e) => setStudentForm({ ...studentForm, semester: Number(e.target.value) })}
+                        onKeyDown={handleDigitsOnlyKeyDown}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '');
+                          setStudentForm({ ...studentForm, semester: val === '' ? '' : Math.min(Math.max(Number(val), 1), 12) });
+                        }}
                         required
                       />
                     </div>
                   </div>
                   <div className="form-group">
-                    <label>Department</label>
+                    <label htmlFor="edit-std-dept">Department</label>
                     <input
+                      id="edit-std-dept"
                       type="text"
                       value={studentForm.department}
                       onChange={(e) => setStudentForm({ ...studentForm, department: e.target.value })}
@@ -1184,82 +1278,147 @@ const AdminDashboard = () => {
               )}
 
               {/* Mark Attendance Modal */}
-              {modalType === 'markAttendance' && (
-                <form onSubmit={handleMarkAttendance}>
-                  <div className="form-group">
-                    <label>Select Student</label>
-                    <select
-                      value={attendanceForm.student}
-                      onChange={(e) => setAttendanceForm({ ...attendanceForm, student: e.target.value })}
-                      required
-                    >
-                      <option value="">-- Choose Student --</option>
-                      {students.map((s) => (
-                        <option key={s._id} value={s._id}>
-                          {s.rollNumber} - {s.userId?.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Select Course</label>
-                    <select
-                      value={attendanceForm.course}
-                      onChange={(e) => setAttendanceForm({ ...attendanceForm, course: e.target.value })}
-                      required
-                    >
-                      <option value="">-- Choose Course --</option>
-                      {courses.map((c) => (
-                        <option key={c._id} value={c._id}>
-                          {c.courseCode} - {c.courseName}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-grid-2">
+              {modalType === 'markAttendance' && (() => {
+                const enrolledCourseIds = attendanceForm.student
+                  ? enrollments
+                      .filter((e) => (e.student?._id || e.student) === attendanceForm.student)
+                      .map((e) => e.course?._id || e.course)
+                  : [];
+
+                const enrolledStudentIds = attendanceForm.course
+                  ? enrollments
+                      .filter((e) => (e.course?._id || e.course) === attendanceForm.course)
+                      .map((e) => e.student?._id || e.student)
+                  : [];
+
+                const filteredCourses = attendanceForm.student
+                  ? courses.filter((c) => enrolledCourseIds.includes(c._id))
+                  : courses;
+
+                const filteredStudents = attendanceForm.course
+                  ? students.filter((s) => enrolledStudentIds.includes(s._id))
+                  : students;
+
+                return (
+                  <form onSubmit={handleMarkAttendance}>
                     <div className="form-group">
-                      <label>Date</label>
-                      <input
-                        type="date"
-                        value={attendanceForm.date}
-                        onChange={(e) => setAttendanceForm({ ...attendanceForm, date: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Status</label>
+                      <label htmlFor="att-student">Select Student</label>
                       <select
-                        value={attendanceForm.status}
-                        onChange={(e) => setAttendanceForm({ ...attendanceForm, status: e.target.value })}
+                        id="att-student"
+                        value={attendanceForm.student}
+                        onChange={(e) => setAttendanceForm({ ...attendanceForm, student: e.target.value })}
                         required
                       >
-                        <option value="present">Present</option>
-                        <option value="absent">Absent</option>
+                        <option value="">-- Choose Student --</option>
+                        {filteredStudents.map((s) => (
+                          <option key={s._id} value={s._id}>
+                            {s.rollNumber} - {s.userId?.name}
+                          </option>
+                        ))}
                       </select>
+                      {attendanceForm.course && (
+                        <small className="field-hint">
+                          Filtered: Showing {filteredStudents.length} student(s) enrolled in selected course.
+                        </small>
+                      )}
                     </div>
-                  </div>
-                  <div className="modal-actions">
-                    <button type="button" onClick={() => setModalType(null)} className="btn-secondary">
-                      Cancel
-                    </button>
-                    <button type="submit" className="btn-primary" disabled={actionLoading}>
-                      {actionLoading ? 'Recording...' : 'Mark Attendance'}
-                    </button>
-                  </div>
-                </form>
-              )}
+
+                    <div className="form-group">
+                      <label htmlFor="att-course">Select Course</label>
+                      <select
+                        id="att-course"
+                        value={attendanceForm.course}
+                        onChange={(e) => setAttendanceForm({ ...attendanceForm, course: e.target.value })}
+                        required
+                        disabled={attendanceForm.student && filteredCourses.length === 0}
+                      >
+                        <option value="">
+                          {attendanceForm.student && filteredCourses.length === 0
+                            ? '-- No Enrolled Courses Available --'
+                            : '-- Choose Course --'}
+                        </option>
+                        {filteredCourses.map((c) => (
+                          <option key={c._id} value={c._id}>
+                            {c.courseCode} - {c.courseName}
+                          </option>
+                        ))}
+                      </select>
+                      {attendanceForm.student && (
+                        filteredCourses.length > 0 ? (
+                          <small className="field-hint">
+                            Filtered: Showing {filteredCourses.length} course(s) student is enrolled in.
+                          </small>
+                        ) : (
+                          <div className="alert-box alert-error mt-2 py-2 text-sm" role="alert">
+                            <AlertCircle size={14} />
+                            <span>This student has not enrolled in any courses yet. Please enroll them first.</span>
+                          </div>
+                        )
+                      )}
+                    </div>
+
+                    <div className="form-grid-2">
+                      <div className="form-group">
+                        <label htmlFor="att-date">Session Date</label>
+                        <input
+                          id="att-date"
+                          type="date"
+                          value={attendanceForm.date}
+                          onChange={(e) => setAttendanceForm({ ...attendanceForm, date: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor="att-status">Status</label>
+                        <select
+                          id="att-status"
+                          value={attendanceForm.status}
+                          onChange={(e) => setAttendanceForm({ ...attendanceForm, status: e.target.value })}
+                          required
+                        >
+                          <option value="present">Present</option>
+                          <option value="absent">Absent</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="modal-actions">
+                      <button type="button" onClick={() => setModalType(null)} className="btn-secondary">
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn-primary"
+                        disabled={actionLoading || (attendanceForm.student && filteredCourses.length === 0)}
+                      >
+                        {actionLoading ? 'Recording...' : 'Mark Attendance'}
+                      </button>
+                    </div>
+                  </form>
+                );
+              })()}
 
               {/* Edit Attendance Modal */}
               {modalType === 'editAttendance' && (
                 <form onSubmit={handleUpdateAttendance}>
                   <p className="modal-subtext">
-                    Correcting attendance record for <strong>{activeItem?.student?.userId?.name}</strong> in{' '}
-                    <strong>{activeItem?.course?.courseCode}</strong>.
+                    Correcting attendance record for{' '}
+                    <strong>
+                      {activeItem?.student?.userId?.name ||
+                        students.find((s) => s._id === (activeItem?.student?._id || activeItem?.student))?.userId?.name ||
+                        'Student'}
+                    </strong>{' '}
+                    in{' '}
+                    <strong>
+                      {activeItem?.course?.courseCode ||
+                        courses.find((c) => c._id === (activeItem?.course?._id || activeItem?.course))?.courseCode ||
+                        'Course'}
+                    </strong>.
                   </p>
                   <div className="form-grid-2">
                     <div className="form-group">
-                      <label>Session Date</label>
+                      <label htmlFor="edit-att-date">Session Date</label>
                       <input
+                        id="edit-att-date"
                         type="date"
                         value={attendanceForm.date}
                         onChange={(e) => setAttendanceForm({ ...attendanceForm, date: e.target.value })}
@@ -1267,8 +1426,9 @@ const AdminDashboard = () => {
                       />
                     </div>
                     <div className="form-group">
-                      <label>Status</label>
+                      <label htmlFor="edit-att-status">Status</label>
                       <select
+                        id="edit-att-status"
                         value={attendanceForm.status}
                         onChange={(e) => setAttendanceForm({ ...attendanceForm, status: e.target.value })}
                         required
@@ -1290,89 +1450,169 @@ const AdminDashboard = () => {
               )}
 
               {/* Enter Grade / Edit Grade Modal */}
-              {(modalType === 'enterGrade' || modalType === 'editGrade') && (
-                <form onSubmit={modalType === 'enterGrade' ? handleEnterGrade : handleUpdateGrade}>
-                  {modalType === 'enterGrade' && (
-                    <>
-                      <div className="form-group">
-                        <label>Student</label>
-                        <select
-                          value={gradeForm.student}
-                          onChange={(e) => setGradeForm({ ...gradeForm, student: e.target.value })}
-                          required
-                        >
-                          <option value="">-- Choose Student --</option>
-                          {students.map((s) => (
-                            <option key={s._id} value={s._id}>
-                              {s.rollNumber} - {s.userId?.name}
+              {(modalType === 'enterGrade' || modalType === 'editGrade') && (() => {
+                const enrolledCourseIds = gradeForm.student
+                  ? enrollments
+                      .filter((e) => (e.student?._id || e.student) === gradeForm.student)
+                      .map((e) => e.course?._id || e.course)
+                  : [];
+
+                const enrolledStudentIds = gradeForm.course
+                  ? enrollments
+                      .filter((e) => (e.course?._id || e.course) === gradeForm.course)
+                      .map((e) => e.student?._id || e.student)
+                  : [];
+
+                const filteredCourses = gradeForm.student
+                  ? courses.filter((c) => enrolledCourseIds.includes(c._id))
+                  : courses;
+
+                const filteredStudents = gradeForm.course
+                  ? students.filter((s) => enrolledStudentIds.includes(s._id))
+                  : students;
+
+                const existingExams = (gradeForm.student && gradeForm.course)
+                  ? grades
+                      .filter(
+                        (g) =>
+                          (g.student?._id || g.student) === gradeForm.student &&
+                          (g.course?._id || g.course) === gradeForm.course
+                      )
+                      .map((g) => g.examType)
+                  : [];
+
+                return (
+                  <form onSubmit={modalType === 'enterGrade' ? handleEnterGrade : handleUpdateGrade}>
+                    {modalType === 'enterGrade' && (
+                      <>
+                        <div className="form-group">
+                          <label htmlFor="grd-student">Select Student</label>
+                          <select
+                            id="grd-student"
+                            value={gradeForm.student}
+                            onChange={(e) => setGradeForm({ ...gradeForm, student: e.target.value })}
+                            required
+                          >
+                            <option value="">-- Choose Student --</option>
+                            {filteredStudents.map((s) => (
+                              <option key={s._id} value={s._id}>
+                                {s.rollNumber} - {s.userId?.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label htmlFor="grd-course">Select Course</label>
+                          <select
+                            id="grd-course"
+                            value={gradeForm.course}
+                            onChange={(e) => setGradeForm({ ...gradeForm, course: e.target.value })}
+                            required
+                            disabled={gradeForm.student && filteredCourses.length === 0}
+                          >
+                            <option value="">
+                              {gradeForm.student && filteredCourses.length === 0
+                                ? '-- No Enrolled Courses Available --'
+                                : '-- Choose Course --'}
                             </option>
-                          ))}
-                        </select>
+                            {filteredCourses.map((c) => (
+                              <option key={c._id} value={c._id}>
+                                {c.courseCode} - {c.courseName}
+                              </option>
+                            ))}
+                          </select>
+                          {gradeForm.student && (
+                            filteredCourses.length > 0 ? (
+                              <small className="field-hint">
+                                Filtered: Showing {filteredCourses.length} course(s) student is enrolled in.
+                              </small>
+                            ) : (
+                              <div className="alert-box alert-error mt-2 py-2 text-sm" role="alert">
+                                <AlertCircle size={14} />
+                                <span>This student is not enrolled in any courses. Grades cannot be entered.</span>
+                              </div>
+                            )
+                          )}
+                        </div>
+                      </>
+                    )}
+
+                    <div className="form-group">
+                      <label htmlFor="grd-examType">Examination Type</label>
+                      <select
+                        id="grd-examType"
+                        value={gradeForm.examType}
+                        onChange={(e) => setGradeForm({ ...gradeForm, examType: e.target.value })}
+                        required
+                        disabled={modalType === 'editGrade'}
+                      >
+                        <option value="internal1" disabled={modalType === 'enterGrade' && existingExams.includes('internal1')}>
+                          Internal Examination 1 {modalType === 'enterGrade' && existingExams.includes('internal1') ? '(Recorded)' : ''}
+                        </option>
+                        <option value="internal2" disabled={modalType === 'enterGrade' && existingExams.includes('internal2')}>
+                          Internal Examination 2 {modalType === 'enterGrade' && existingExams.includes('internal2') ? '(Recorded)' : ''}
+                        </option>
+                        <option value="external" disabled={modalType === 'enterGrade' && existingExams.includes('external')}>
+                          External End-Semester Exam {modalType === 'enterGrade' && existingExams.includes('external') ? '(Recorded)' : ''}
+                        </option>
+                      </select>
+                      {modalType === 'enterGrade' && existingExams.length === 3 && (
+                        <div className="alert-box alert-warning mt-2 py-2 text-sm" role="alert">
+                          <span>All 3 examination assessments have already been recorded for this course.</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="form-grid-2">
+                      <div className="form-group">
+                        <label htmlFor="grd-marksObtained">Marks Obtained (digits only)</label>
+                        <input
+                          id="grd-marksObtained"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={gradeForm.marksObtained}
+                          onKeyDown={handleDigitsOnlyKeyDown}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            setGradeForm({ ...gradeForm, marksObtained: val === '' ? '' : Number(val) });
+                          }}
+                          required
+                        />
                       </div>
                       <div className="form-group">
-                        <label>Course</label>
-                        <select
-                          value={gradeForm.course}
-                          onChange={(e) => setGradeForm({ ...gradeForm, course: e.target.value })}
+                        <label htmlFor="grd-maxMarks">Maximum Marks (digits only)</label>
+                        <input
+                          id="grd-maxMarks"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={gradeForm.maxMarks}
+                          onKeyDown={handleDigitsOnlyKeyDown}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            setGradeForm({ ...gradeForm, maxMarks: val === '' ? '' : Number(val) });
+                          }}
                           required
-                        >
-                          <option value="">-- Choose Course --</option>
-                          {courses.map((c) => (
-                            <option key={c._id} value={c._id}>
-                              {c.courseCode} - {c.courseName}
-                            </option>
-                          ))}
-                        </select>
+                        />
                       </div>
-                    </>
-                  )}
-
-                  <div className="form-group">
-                    <label>Examination Type</label>
-                    <select
-                      value={gradeForm.examType}
-                      onChange={(e) => setGradeForm({ ...gradeForm, examType: e.target.value })}
-                      required
-                    >
-                      <option value="internal1">Internal Examination 1</option>
-                      <option value="internal2">Internal Examination 2</option>
-                      <option value="external">External End-Semester Exam</option>
-                    </select>
-                  </div>
-
-                  <div className="form-grid-2">
-                    <div className="form-group">
-                      <label>Marks Obtained</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={gradeForm.marksObtained}
-                        onChange={(e) => setGradeForm({ ...gradeForm, marksObtained: Number(e.target.value) })}
-                        required
-                      />
                     </div>
-                    <div className="form-group">
-                      <label>Maximum Marks</label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={gradeForm.maxMarks}
-                        onChange={(e) => setGradeForm({ ...gradeForm, maxMarks: Number(e.target.value) })}
-                        required
-                      />
-                    </div>
-                  </div>
 
-                  <div className="modal-actions">
-                    <button type="button" onClick={() => setModalType(null)} className="btn-secondary">
-                      Cancel
-                    </button>
-                    <button type="submit" className="btn-primary" disabled={actionLoading}>
-                      {actionLoading ? 'Saving...' : modalType === 'enterGrade' ? 'Submit Grade' : 'Update Grade'}
-                    </button>
-                  </div>
-                </form>
-              )}
+                    <div className="modal-actions">
+                      <button type="button" onClick={() => setModalType(null)} className="btn-secondary">
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn-primary"
+                        disabled={actionLoading || (modalType === 'enterGrade' && gradeForm.student && filteredCourses.length === 0)}
+                      >
+                        {actionLoading ? 'Saving...' : modalType === 'enterGrade' ? 'Submit Grade' : 'Update Grade'}
+                      </button>
+                    </div>
+                  </form>
+                );
+              })()}
             </div>
           </div>
         </div>

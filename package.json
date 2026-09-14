@@ -3,10 +3,18 @@
   "version": "1.0.0",
   "description": "Student ERP Monorepo - Backend & Frontend",
   "scripts": {
+    "build": "cd frontend && npm install && npm run build",
     "backend": "cd backend && npm start",
     "backend:dev": "cd backend && npm run dev",
     "seed": "cd backend && npm run seed",
-    "frontend": "cd frontend && npm run dev",
-    "build": "cd frontend && npm run build"
+    "frontend": "cd frontend && npm run dev"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.5.2"
   }
 }
